@@ -13,7 +13,7 @@ Cerealizer.QueryString.prototype = {
 	regex: /([^=&]+)=([^&]+)/,
 
 	_convert: function _convert(s) {
-		s = unescape(s);
+		s = typeof s === "string" ? unescape(s) : s;
 
 		if (/^[-+0-9.]+$/.test(s) && !isNaN(s)) {
 			return Number(s);
@@ -47,84 +47,35 @@ Cerealizer.QueryString.prototype = {
 		var keys, values;
 
 		str.replace(/^\?/, "").replace(this.pairsRegex, function(match, key, value) {
-			if (/,/.test(value)) {
-				values = value.split(/,/g);
+			if (/\[\]/.test(key)) {
+				throw new Error("Cannot deserialize keys with empty array notation: " + key);
+			}
 
-				for (var i = 0, length = values.length; i < length; i++) {
-					that._convertAndHydrate(data, key, values[i]);
-				}
-			}
-			else {
-				that._convertAndHydrate(data, key, value);
-			}
+			that._convertAndHydrate(data, key, value);
 		});
 
 		return data;
 	},
 
 	_hydrate: function _hydrate(data, keys, value) {
-		var currData = data, key, prevKey = "";
-		var i = 0, length = keys.length, last = length - 1;
+		var currData = data,
+		    key, i = 0,
+		    length = keys.length - 1,
+		    lastKey = unescape( keys[ keys.length - 1 ] );
 
+		// Find the object we want to set the value on
 		for (i; i < length; i++) {
-			key = keys[i]
-
-			// if (key === "") {
-			// 	if (prevKey) {
-			// 		currData[prevKey] = currData[prevKey] instanceof Array ? currData[prevKey] : [ currData[prevKey] ];
-
-			// 	}
-			// 	else {
-			// 		throw new Error("Invalid key detected - Empty array notation is not supported.");
-			// 	}
-			// }
-
 			key = unescape(keys[i]);
 
-			if (currData.hasOwnProperty(key)) {
-				if (i === last) {
-					if (currData[key] instanceof Array) {
-						currData[key].push(value);
-					}
-					else {
-						(currData[key] = [ currData[key] ]).push(value);
-					}
-				}
-				else {
-					currData = currData[key];
-				}
-			}
-			else if (i < last) {
-				if (key === "") {
-					if (!(currData[prevKey] instanceof Array)) {
-						currData[prevKey] = currData[prevKey] ? [ currData[prevKey] ] : [];
-					}
-
-					currData[prevKey].push({});
-					currData = currData[prevKey][ currData[prevKey].length - 1 ];
-				}
-				else {
-					currData = (currData[key] = currData[key] || {});
-				}
-			}
-			else {
-				// TODO: Test the hell out of this
-				if (currData[key] instanceof Array) {
-					currData[key].push(value);
-				}
-				else if (/[0-9]+/.test(key)) {
-					currData[prevKey] = currData[prevKey] ? [ currData[prevKey] ] : [];
-					currData[prevKey].push(value);
-				}
-				else {
-					currData[key] = value;
-				}
-
-				break;
+			if (!currData.hasOwnProperty(key)) {
+				currData[key] = {};
 			}
 
-			prevKey = key;
+			currData = currData[key];
 		}
+
+		currData[lastKey] = value;
+		currData = keys = null;
 
 		return data;
 	},
@@ -145,8 +96,62 @@ Cerealizer.QueryString.prototype = {
 		}
 	},
 
+	_isObject: function _isObject(x) {
+		return Object.prototype.toString.call(x) === "[object Object]";
+	},
+
 	serialize: function serialize(data) {
-		throw new Error("Not Implemented");
+		var keyDelimeterLeft = this.hashNotation ? "[" : ".",
+		    keyDelimeterRight = this.hashNotation ? "]" : "",
+		    arrayKeyDelimeterLeft = "[",
+		    arrayKeyDelimeterRight = "]",
+		    params = [];
+
+		return this._serialize(data, params, "", keyDelimeterLeft, keyDelimeterRight, arrayKeyDelimeterLeft, arrayKeyDelimeterRight).join("&");
+	},
+
+	_serialize: function _serialize(data, params, keyPrefix, keyDelimeterLeft, keyDelimeterRight, arrayKeyDelimeterLeft, arrayKeyDelimeterRight) {
+		var nextKeyPrefix,
+		    arrayKeyRegex = /^[0-9+]$/,
+		    name, value;
+
+		for (var key in data) {
+			if (data.hasOwnProperty(key)) {
+				if (this._isObject(data[key])) {
+					if (keyPrefix) {
+						if (arrayKeyRegex.test(key)) {
+							nextKeyPrefix = keyPrefix + arrayKeyDelimeterLeft + key + arrayKeyDelimeterRight;
+						}
+						else {
+							nextKeyPrefix = keyPrefix + keyDelimeterLeft + key + keyDelimeterRight;
+						}
+					}
+					else {
+						nextKeyPrefix = key;
+					}
+
+					this._serialize(data[key], params, nextKeyPrefix, keyDelimeterLeft, keyDelimeterRight, arrayKeyDelimeterLeft, arrayKeyDelimeterRight);
+				}
+				else if (this._isValid(data[key])) {
+					if (keyPrefix) {
+						if (arrayKeyRegex.test(key)) {
+							name = keyPrefix + arrayKeyDelimeterLeft + escape(key) + arrayKeyDelimeterRight;
+						}
+						else {
+							name = keyPrefix + keyDelimeterLeft + escape(key) + keyDelimeterRight;
+						}
+					}
+					else {
+						name = escape(key);
+					}
+
+					value = escape(data[key]);
+					params.push(name + "=" + value);
+				}
+			}
+		}
+
+		return params;
 	},
 
 	test: function test(str) {
@@ -158,3 +163,9 @@ Cerealizer.QueryString.prototype = {
 	}
 
 };
+
+Cerealizer.registerType(Cerealizer.QueryString, [
+	"queryString",
+	"application/x-www-form-urlencoded",
+	"multipart/form-data"
+]);

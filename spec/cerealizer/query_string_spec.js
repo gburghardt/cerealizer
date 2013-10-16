@@ -127,6 +127,81 @@ describe("Cerealizer", function() {
 
 		});
 
+		describe("_hydrate", function() {
+
+			it("creates a simple object", function() {
+				var keys = ["blog", "title"];
+				var value = "Just Testing";
+				var data = {};
+
+				this.serializer._hydrate(data, keys, value);
+
+				expect(data).toEqual({
+					blog: {
+						title: "Just Testing"
+					}
+				});
+			});
+
+			it("creates a deeply nested object", function() {
+				var keys = ["universe", "galaxy", "solar_system", "planet", "name"];
+				var value = "Earth";
+				var data = {};
+
+				this.serializer._hydrate(data, keys, value);
+
+				expect(data).toEqual({
+					universe: {
+						galaxy: {
+							solar_system: {
+								planet: {
+									name: "Earth"
+								}
+							}
+						}
+					}
+				});
+			});
+
+			it("adds to an existing inner object key", function() {
+				var keys = ["post", "title"];
+				var value = "Just Testing";
+				var data = {
+					post: {
+						body: "Foo"
+					}
+				};
+
+				this.serializer._hydrate(data, keys, value);
+
+				expect(data).toEqual({
+					post: {
+						title: "Just Testing",
+						body: "Foo"
+					}
+				});
+			});
+
+			it("overwrites values", function() {
+				var keys = ["post", "title"];
+				var value = "Changed";
+				var data = {
+					post: {
+						title: "Fail"
+					}
+				};
+
+				this.serializer._hydrate(data, keys, value);
+
+				expect(data).toEqual({
+					post: {
+						title: "Changed"
+					}
+				});
+			});
+
+		});
+
 		describe("deserialize", function() {
 
 			it("converts number strings to numbers", function() {
@@ -199,26 +274,11 @@ describe("Cerealizer", function() {
 				expect(result.body).toBe(undefined);
 			});
 
-			it("creates an array of values from duplicate keys", function() {
+			it("overwrites values from duplicate keys", function() {
 				var qs = "test=1&test=2";
 				var result = this.serializer.deserialize(qs);
 
-				expect(result.test instanceof Array).toBe(true);
-				expect(result.test).toEqual([1, 2]);
-			});
-
-			it("creates an array of values from a single key with comma separated values", function() {
-				var qs = "test=a,b,c";
-				var result = this.serializer.deserialize(qs);
-
-				expect(result.test).toEqual(["a", "b", "c"]);
-			});
-
-			it("merges array values when multiple keys with comma separate values are encountered", function() {
-				var qs = "test=a,b&test=c,d";
-				var result = this.serializer.deserialize(qs);
-
-				expect(result.test).toEqual(["a", "b", "c", "d"]);
+				expect(result.test).toBe(2);
 			});
 
 			it("throws an error with empty array notation", function() {
@@ -227,7 +287,7 @@ describe("Cerealizer", function() {
 
 				expect(function() {
 					serializer.deserialize(qs);
-				}).toThrow(new Error("Invalid key detected - Empty array notation is not supported."));
+				}).toThrow(new Error("Cannot deserialize keys with empty array notation: letters[]"));
 			});
 
 			describe("with nested keys", function() {
@@ -347,7 +407,7 @@ describe("Cerealizer", function() {
 
 		describe("serialize", function() {
 
-			xit("converts a simple object to key-value pairs", function() {
+			it("converts a simple object to key-value pairs", function() {
 				var data = {
 					title: "Testing",
 					price: 12.99,
@@ -365,7 +425,7 @@ describe("Cerealizer", function() {
 				expect(result).toBe(expected);
 			});
 
-			xit("excludes null values", function() {
+			it("excludes null values", function() {
 				var data = { title: null };
 				var expected = "";
 				var result = this.serializer.serialize(data);
@@ -373,7 +433,7 @@ describe("Cerealizer", function() {
 				expect(result).toBe(expected);
 			});
 
-			xit("excludes undefined values", function() {
+			it("excludes undefined values", function() {
 				var data = { title: undefined };
 				var expected = "";
 				var result = this.serializer.serialize(data);
@@ -381,7 +441,7 @@ describe("Cerealizer", function() {
 				expect(result).toBe(expected);
 			});
 
-			xit("excludes NaN values", function() {
+			it("excludes NaN values", function() {
 				var data = { price: NaN };
 				var expected = "";
 				var result = this.serializer.serialize(data);
@@ -392,9 +452,85 @@ describe("Cerealizer", function() {
 			describe("with a nested object", function() {
 
 				describe("configured to use hash notation", function() {
+
+					it("converts a simple object", function() {
+						var data = { title: "Testing" };
+						var expected = "title=Testing";
+						var result = this.serializer.serialize(data);
+
+						expect(result).toBe(expected);
+					});
+
+					it("converts a nested object", function() {
+						var data = {
+							blog: {
+								title: "Test Blog",
+								posts: {
+									0: {
+										title: "Testing",
+										body: "Test"
+									},
+									1: {
+										title: "Test 2"
+									}
+								}
+							}
+						};
+						var expected = [
+							"blog[title]=Test%20Blog",
+							"blog[posts][0][title]=Testing",
+							"blog[posts][0][body]=Test",
+							"blog[posts][1][title]=Test%202"
+						].sort().join("&");
+						var result = this.serializer.serialize(data);
+						result = result.split("&").sort().join("&");
+
+						expect(result).toBe(expected);
+					});
+
 				});
 
 				describe("configured to use dot notation", function() {
+
+					beforeEach(function() {
+						this.serializer.hashNotation = false;
+					});
+
+					it("converts a simple object", function() {
+						var data = { title: "Testing" };
+						var expected = "title=Testing";
+						var result = this.serializer.serialize(data);
+
+						expect(result).toBe(expected);
+					});
+
+					it("converts a nested object", function() {
+						var data = {
+							blog: {
+								title: "Test Blog",
+								posts: {
+									0: {
+										title: "Testing",
+										body: "Test"
+									},
+									1: {
+										title: "Test 2"
+									}
+								}
+							}
+						};
+						var expected = [
+							"blog.title=Test%20Blog",
+							"blog.posts[0].title=Testing",
+							"blog.posts[0].body=Test",
+							"blog.posts[1].title=Test%202"
+						].sort().join("&");
+						var result = this.serializer.serialize(data);
+						result = result.split("&").sort().join("&");
+
+						expect(result).toBe(expected);
+					});
+
 				});
 
 			});

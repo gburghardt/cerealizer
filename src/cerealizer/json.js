@@ -23,3 +23,13 @@ Cerealizer.Json.prototype = {
 	}
 
 };
+
+if (!window.JSON) {
+	throw new Error("No native JSON parser was found. Consider using JSON2.js (https://github.com/douglascrockford/JSON-js)");
+}
+
+Cerealizer.registerType(Cerealizer.Json, [
+	"json",
+	"text/json",
+	"application/json"
+]);
