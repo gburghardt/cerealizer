@@ -1,0 +1,16 @@
+{
+	"name": "cerealizer",
+	"description": "Cerealizer is a general purpose object serializer and deserializer for a variety of formats. It sports a generic interface to make programmatically parsing and stringifying data easier.",
+	"authors": [
+		"Greg Burghardt <greg_burghardt@yahoo.com>"
+	],
+	"version": "0.0.1",
+	"license": "MIT",
+	"repository": { "type": "git", "url": "https://github.com/gburghardt/cerealizer.git" },
+	"main": [
+		"src/cerealizer.js",
+		"src/cerealizer/json.js",
+		"src/cerealizer/query_string.js",
+		"src/cerealizer/xml.js"
+	]
+}
