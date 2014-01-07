@@ -13,7 +13,7 @@ These formats are supported:
 ## Why Use Cerealizer?
 
 Cerealizer is ideal for applications that need to manipulate data
-before sending it to the server for processing. It provides and easy,
+before sending it to the server for processing. It provides an easy,
 generic way of converting data from a string format to a JavaScript
 object, and back to a string format. Regardless of which format you
 use, the process is basically the same:
